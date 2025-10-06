@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ka-Ping Device Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+        }
+
+        .stat-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .devices-table {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .table-header {
+            background: #007bff;
+            color: white;
+            padding: 15px;
+        }
+
+        .table-content {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+
+        .status-online {
+            color: #28a745;
+        }
+
+        .status-offline {
+            color: #dc3545;
+        }
+
+        .refresh-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .refresh-btn:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Ka-Ping Device Monitor</h1>
+            <p>Real-time device monitoring and tracking</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-number" id="totalDevices">0</div>
+                <div class="stat-label">Total Devices</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="onlineDevices">0</div>
+                <div class="stat-label">Online (Last 10 min)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="offlineDevices">0</div>
+                <div class="stat-label">Offline</div>
+            </div>
+        </div>
+
+        <button class="refresh-btn" onclick="loadDevices()">Refresh</button>
+
+        <div class="devices-table">
+            <div class="table-header">
+                <h3>Connected Devices</h3>
+            </div>
+            <div class="table-content">
+                <table id="devicesTable">
+                    <thead>
+                        <tr>
+                            <th>Hostname</th>
+                            <th>UUID</th>
+                            <th>OS</th>
+                            <th>MAC Address</th>
+                            <th>Public IP</th>
+                            <th>Location</th>
+                            <th>Last Seen</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="devicesTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const devices = await response.json();
+
+                const tbody = document.getElementById('devicesTableBody');
+                tbody.innerHTML = '';
+
+                let totalDevices = devices.length;
+                let onlineDevices = 0;
+                let offlineDevices = 0;
+
+                devices.forEach(device => {
+                    const row = document.createElement('tr');
+                    const now = new Date();
+                    const lastSeen = new Date(device.last_seen);
+                    const timeDiff = (now - lastSeen) / (1000 * 60); // minutes
+                    const isOnline = timeDiff <= 10;
+
+                    if (isOnline) onlineDevices++;
+                    else offlineDevices++;
+
+                    const location = [device.city, device.region, device.country].filter(Boolean).join(', ') || 'Unknown';
+                    const statusClass = isOnline ? 'status-online' : 'status-offline';
+                    const statusText = isOnline ? 'Online' : 'Offline';
+
+                    const coordinates = device.latitude && device.longitude ?
+                        device.latitude + ', ' + device.longitude : 'N/A';
+                    const mapLink = device.latitude && device.longitude ?
+                        '<a href="https://maps.google.com/?q=' + device.latitude + ',' + device.longitude + '" target="_blank" style="color: #007bff; text-decoration: none;">View Map</a>' :
+                        'N/A';
+
+                    row.innerHTML = `
+                        <td>${device.hostname}</td>
+                        <td>${device.uuid.substring(0, 8)}...</td>
+                        <td>${device.os}</td>
+                        <td>${device.mac}</td>
+                        <td>${device.public_ip}</td>
+                        <td>${location}<br><small>${coordinates}</small><br>${mapLink}</td>
+                        <td>${lastSeen.toLocaleString()}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                document.getElementById('totalDevices').textContent = totalDevices;
+                document.getElementById('onlineDevices').textContent = onlineDevices;
+                document.getElementById('offlineDevices').textContent = offlineDevices;
+            } catch (error) {
+                console.error('Error loading devices:', error);
+            }
+        }
+
+        // Load devices on page load
+        loadDevices();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadDevices, 30000);
+    </script>
+</body>
+
+</html>
